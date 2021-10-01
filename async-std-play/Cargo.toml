@@ -1,0 +1,8 @@
+[package]
+authors = ["Michael Milewski <saramic@gmail.com>"]
+edition = "2018"
+name = "async-std-play"
+version = "0.0.1"
+
+[dependencies]
+async-std = { version = "1.10.0", features = ["attributes"] }
