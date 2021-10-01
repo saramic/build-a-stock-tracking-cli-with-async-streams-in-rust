@@ -36,6 +36,51 @@ trait AsyncStockSignal {
     fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
 }
 
+trait StockSignal {
+    type SignalType;
+    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
+}
+pub struct PriceDifference {
+}
+
+impl StockSignal for PriceDifference {
+    type SignalType = (f64, f64);
+    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        price_diff(series)
+    }
+}
+
+pub struct MinPrice {
+}
+
+impl StockSignal for MinPrice {
+    type SignalType = f64;
+    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        min(series)
+    }
+}
+
+pub struct MaxPrice {
+}
+
+impl StockSignal for MaxPrice {
+    type SignalType = f64;
+    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        max(series)
+    }
+}
+
+pub struct WindowedSMA {
+    window_size: usize
+}
+
+impl StockSignal for WindowedSMA {
+    type SignalType = Vec<f64>;
+    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        n_window_sma(self.window_size, series)
+    }
+}
+
 ///
 /// Calculates the absolute and relative difference between the beginning and ending of an f64 series. The relative difference is relative to the beginning.
 ///
