@@ -29,3 +29,22 @@ https://www.manning.com/liveproject/advanced-data-streaming-with-async-rust
 
 ...TODO
 
+## Other
+
+### async-std play
+
+getting my head around async-std by following examples from https://docs.rs/async-std/1.10.0/async_std/#examples
+
+```
+cd async-std-play
+cargo build
+cargo run
+
+# to test UDP server
+# run netcat in
+#   -v verbose
+#   -u UDP mode
+# on IP and port, any typed content will be echoed back
+nc -v -u 127.0.0.1 8080
+```
+
