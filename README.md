@@ -31,6 +31,13 @@ https://www.manning.com/liveproject/advanced-data-streaming-with-async-rust
 
 ## Other
 
+### Rust web development
+
+as part of the Live Project do some exercises as part of the included Live Book
+https://www.manning.com/books/rust-web-development
+
+- rust-web-development/eg-2_2-using-match-to-work-with-options
+
 ### async-std play
 
 getting my head around async-std by following examples from https://docs.rs/async-std/1.10.0/async_std/#examples
