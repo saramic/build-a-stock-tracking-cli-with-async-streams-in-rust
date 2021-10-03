@@ -38,6 +38,8 @@ https://www.manning.com/books/rust-web-development
 
 - rust-web-development/eg-2_2-using-match-to-work-with-options
 - rust-web-development/eg-2_3-create-and-print-question
+- rust-web-development/eg-2_20-async-http-call
+- rust-web-development/eg-2_20-minimal-rust-http-server-w-warp
 
 ### async-std play
 
