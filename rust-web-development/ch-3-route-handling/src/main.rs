@@ -70,8 +70,11 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 #[tokio::main]
 async fn main() {
     let get_items = warp::get()
-        .and(warp::path("questions"))
-        .and(warp::path::param())
+        // ONE version
+        // .and(warp::path("questions"))
+        // .and(warp::path::param())
+        // ANOTHER version
+        .and(warp::path!("questions" / String))
         .and(warp::path::end())
         .and_then(get_questions)
         .recover(return_error);
