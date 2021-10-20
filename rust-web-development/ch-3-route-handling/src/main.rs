@@ -39,9 +39,9 @@ impl FromStr for QuestionId {
 struct InvalidId;
 impl Reject for InvalidId {}
 
-async fn get_questions() -> Result<impl warp::Reply, warp::Rejection> {
+async fn get_questions(id_param: String) -> Result<impl warp::Reply, warp::Rejection> {
     let question = Question::new(
-        QuestionId::from_str("1").expect("No id provided"),
+        QuestionId::from_str(&id_param).expect("No id provided"),
         "First Question".to_string(),
         "Content of question".to_string(),
         Some(vec!["faq".to_string()]),
@@ -71,6 +71,7 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 async fn main() {
     let get_items = warp::get()
         .and(warp::path("questions"))
+        .and(warp::path::param())
         .and(warp::path::end())
         .and_then(get_questions)
         .recover(return_error);
