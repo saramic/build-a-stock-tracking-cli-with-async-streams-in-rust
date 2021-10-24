@@ -1,0 +1,14 @@
+{ 
+  "QI0001" : {
+    "id": "QI0001",
+    "title": "First question ever asked",
+    "content": "How does this work?",
+    "tags": ["general"]
+  },
+  "QI0002" : {
+    "id": "QI0002",
+    "title": "random second question",
+    "content": "How many questions?",
+    "tags": ["general"]
+  }
+}

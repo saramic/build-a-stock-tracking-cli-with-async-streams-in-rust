@@ -1,9 +1,9 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct Question {
     id: QuestionId,
     title: String,
@@ -11,7 +11,7 @@ struct Question {
     tags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 struct QuestionId(String);
 
 impl Question {
@@ -44,31 +44,16 @@ struct Store {
 impl Store {
     fn new() -> Self {
         Store {
-            questions: HashMap::new(),
+            questions: Self::init(),
         }
     }
-    fn init(&mut self) -> Self {
-        let question = Question::new(
-            QuestionId::from_str("1").expect("invalid"),
-            "How?".to_string(),
-            "Please help!".to_string(),
-            Some(vec!["general".to_string()]),
-        );
-        self.add_question(&question)
-    }
-
-    fn add_question(&mut self, question: &Question) -> Self {
-        self.questions.insert(question.clone().id, question.clone());
-
-        Self {
-            questions: self.questions.clone(),
-        }
+    fn init() -> HashMap<QuestionId, Question> {
+        let file = include_str!("../questions.json");
+        serde_json::from_str(file).expect("cant' read questions.json")
     }
 }
 
 fn main() {
-    println!("Hello, world!");
-    let store = &mut Store::new();
-    store.init();
+    let store = Store::new();
     println!("{:?}", store)
 }
