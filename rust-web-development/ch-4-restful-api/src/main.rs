@@ -44,7 +44,28 @@ impl FromStr for QuestionId {
 struct InvalidId;
 impl Reject for InvalidId {}
 
-async fn get_questions(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+async fn get_questions(
+    params: HashMap<String, String>,
+    store: Store,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // print all params
+    println!("{:?}", params);
+
+    // print the start param if there is Some
+    match params.get("start") {
+        Some(start) => println!("{}", start),
+        None => println!("no start value"),
+    }
+
+    // set Some start param and print it
+    if let Some(n) = params.get("start") {
+        println!("{}", n);
+    }
+
+    // as a usize, numeric
+    if let Some(n) = params.get("start") {
+        println!("{:?}", n.parse::<usize>().expect("Could not parse start"));
+    }
     let res: Vec<Question> = store.questions.values().cloned().collect();
 
     Ok(warp::reply::json(&res))
@@ -100,11 +121,18 @@ async fn main() {
     let get_items = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
-        .and(store_filter)
-        .and_then(get_questions)
-        .recover(return_error);
+        .and(warp::query())
+        .and(store_filter.clone())
+        .and_then(get_questions);
 
     let routes = get_items.with(cors);
+    // let routes = get_questions
+    //     .or(update_question)
+    //     .or(add_question)
+    //     .or(add_answer)
+    //     .or(delete_question)
+    //     .with(cors)
+    //     .recover(return_error);
 
     println!(
         "listening on http://127.0.0.1:1337\nbut only serving http://127.0.0.1:1337/questions"
