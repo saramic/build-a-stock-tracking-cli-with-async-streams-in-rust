@@ -1,5 +1,7 @@
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use warp::{
     filters::{body::BodyDeserializeError, cors::CorsForbidden},
     http::Method,
@@ -38,16 +40,28 @@ async fn get_questions(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     if params.len() > 0 {
         let pagination = extract_pagination(params)?;
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().values().cloned().collect();
         if pagination.end > res.len() {
             return Err(warp::reject::custom(Error::OutOfBoundsError));
         }
         let res = &res[pagination.start..pagination.end];
         Ok(warp::reply::json(&res))
     } else {
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().values().cloned().collect();
         Ok(warp::reply::json(&res))
     }
+}
+
+async fn add_question(
+    store: Store,
+    question: Question,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    store
+        .questions
+        .write()
+        .insert(question.clone().id, question);
+
+    Ok(warp::reply::with_status("Question added", StatusCode::OK))
 }
 
 impl std::fmt::Display for Error {
@@ -107,13 +121,13 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 
 #[derive(Debug, Clone)]
 struct Store {
-    questions: HashMap<QuestionId, Question>,
+    questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
 }
 
 impl Store {
     fn new() -> Self {
         Store {
-            questions: Self::init(),
+            questions: Arc::new(RwLock::new(Self::init())),
         }
     }
     fn init() -> HashMap<QuestionId, Question> {
@@ -139,7 +153,17 @@ async fn main() {
         .and(store_filter.clone())
         .and_then(get_questions);
 
-    let routes = get_questions.with(cors).recover(return_error);
+    let add_question = warp::post()
+        .and(warp::path("questions"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(add_question);
+
+    let routes = get_questions
+        .or(add_question)
+        .with(cors)
+        .recover(return_error);
 
     println!(
         "listening on http://127.0.0.1:1337\nbut only serving http://127.0.0.1:1337/questions"
