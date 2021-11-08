@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use warp::{
-    filters::cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, Filter,
-    Rejection, Reply,
+    filters::{body::BodyDeserializeError, cors::CorsForbidden},
+    http::Method,
+    http::StatusCode,
+    reject::Reject,
+    Filter, Rejection, Reply,
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -26,11 +29,8 @@ struct Pagination {
 enum Error {
     ParseError(std::num::ParseIntError),
     MissingParameters,
+    OutOfBoundsError,
 }
-
-#[derive(Debug)]
-struct InvalidId;
-impl Reject for InvalidId {}
 
 async fn get_questions(
     params: HashMap<String, String>,
@@ -39,6 +39,9 @@ async fn get_questions(
     if params.len() > 0 {
         let pagination = extract_pagination(params)?;
         let res: Vec<Question> = store.questions.values().cloned().collect();
+        if pagination.end > res.len() {
+            return Err(warp::reject::custom(Error::OutOfBoundsError));
+        }
         let res = &res[pagination.start..pagination.end];
         Ok(warp::reply::json(&res))
     } else {
@@ -52,6 +55,7 @@ impl std::fmt::Display for Error {
         match *self {
             Error::ParseError(ref err) => write!(f, "Cannot parse parameter: {}", err),
             Error::MissingParameters => write!(f, "Missing parameter"),
+            Error::OutOfBoundsError => write!(f, "Index out of bounds"),
         }
     }
 }
@@ -78,9 +82,9 @@ fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Err
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     println!("{:?}", r);
-    if let Some(InvalidId) = r.find() {
+    if let Some(error) = r.find::<BodyDeserializeError>() {
         Ok(warp::reply::with_status(
-            "No valid ID presented".to_string(),
+            error.to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else if let Some(error) = r.find::<CorsForbidden>() {
@@ -128,21 +132,14 @@ async fn main() {
         .allow_header("content-type")
         .allow_methods(&[Method::PUT, Method::DELETE]);
 
-    let get_items = warp::get()
+    let get_questions = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
         .and(warp::query())
         .and(store_filter.clone())
         .and_then(get_questions);
 
-    let routes = get_items.with(cors);
-    // let routes = get_questions
-    //     .or(update_question)
-    //     .or(add_question)
-    //     .or(add_answer)
-    //     .or(delete_question)
-    //     .with(cors)
-    //     .recover(return_error);
+    let routes = get_questions.with(cors).recover(return_error);
 
     println!(
         "listening on http://127.0.0.1:1337\nbut only serving http://127.0.0.1:1337/questions"
