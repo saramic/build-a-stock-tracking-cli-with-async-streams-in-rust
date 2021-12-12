@@ -45,10 +45,20 @@ trait StockSignal {
 pub struct PriceDifference {
 }
 
-impl StockSignal for PriceDifference {
+#[async_trait]
+impl AsyncStockSignal for PriceDifference {
     type SignalType = (f64, f64);
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
-        price_diff(series)
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        if !series.is_empty() {
+            // unwrap is safe here even if first == last
+            let (first, last) = (series.first().unwrap(), series.last().unwrap());
+            let abs_diff = last - first;
+            let first = if *first == 0.0 { 1.0 } else { *first };
+            let rel_diff = abs_diff / first;
+            Some((abs_diff, rel_diff))
+        } else {
+            None
+        }
     }
 }
 
@@ -90,26 +100,6 @@ impl StockSignal for WindowedSMA {
     type SignalType = Vec<f64>;
     fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
         n_window_sma(self.window_size, series)
-    }
-}
-
-///
-/// Calculates the absolute and relative difference between the beginning and ending of an f64 series. The relative difference is relative to the beginning.
-///
-/// # Returns
-///
-/// A tuple `(absolute, relative)` difference.
-///
-fn price_diff(a: &[f64]) -> Option<(f64, f64)> {
-    if !a.is_empty() {
-        // unwrap is safe here even if first == last
-        let (first, last) = (a.first().unwrap(), a.last().unwrap());
-        let abs_diff = last - first;
-        let first = if *first == 0.0 { 1.0 } else { *first };
-        let rel_diff = abs_diff / first;
-        Some((abs_diff, rel_diff))
-    } else {
-        None
     }
 }
 
@@ -162,6 +152,7 @@ async fn main() -> std::io::Result<()> {
 
     let max = MaxPrice {};
     let min = MinPrice {};
+    let price_diff = PriceDifference {};
 
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
@@ -172,7 +163,7 @@ async fn main() -> std::io::Result<()> {
                 let period_max: f64 = max.calculate(&closes).await.unwrap();
                 let period_min: f64 = min.calculate(&closes).await.unwrap();
                 let last_price = *closes.last().unwrap_or(&0.0);
-                let (_, pct_change) = price_diff(&closes).unwrap_or((0.0, 0.0));
+                let (_, pct_change) = price_diff.calculate(&closes).await.unwrap_or((0.0, 0.0));
                 let sma = n_window_sma(30, &closes).unwrap_or_default();
 
             // a simple way to output CSV data
@@ -196,18 +187,18 @@ mod tests {
     #![allow(non_snake_case)]
     use super::*;
 
-    #[test]
-    fn test_PriceDifference_calculate() {
+    #[async_std::test]
+    async fn test_PriceDifference_calculate() {
         let signal = PriceDifference {};
-        assert_eq!(signal.calculate(&[]), None);
-        assert_eq!(signal.calculate(&[1.0]), Some((0.0, 0.0)));
-        assert_eq!(signal.calculate(&[1.0, 0.0]), Some((-1.0, -1.0)));
+        assert_eq!(signal.calculate(&[]).await, None);
+        assert_eq!(signal.calculate(&[1.0]).await, Some((0.0, 0.0)));
+        assert_eq!(signal.calculate(&[1.0, 0.0]).await, Some((-1.0, -1.0)));
         assert_eq!(
-            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]),
+            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]).await,
             Some((8.0, 4.0))
         );
         assert_eq!(
-            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]),
+            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]).await,
             Some((1.0, 1.0))
         );
     }
