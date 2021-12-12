@@ -96,26 +96,20 @@ pub struct WindowedSMA {
     window_size: usize
 }
 
-impl StockSignal for WindowedSMA {
+#[async_trait]
+impl AsyncStockSignal for WindowedSMA {
     type SignalType = Vec<f64>;
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
-        n_window_sma(self.window_size, series)
-    }
-}
-
-///
-/// Window function to create a simple moving average
-///
-fn n_window_sma(n: usize, series: &[f64]) -> Option<Vec<f64>> {
-    if !series.is_empty() && n > 1 {
-        Some(
-            series
-                .windows(n)
-                .map(|w| w.iter().sum::<f64>() / w.len() as f64)
-                .collect(),
-        )
-    } else {
-        None
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        if !series.is_empty() && self.window_size > 1 {
+            Some(
+                series
+                    .windows(self.window_size)
+                    .map(|w| w.iter().sum::<f64>() / w.len() as f64)
+                    .collect(),
+            )
+        } else {
+            None
+        }
     }
 }
 
@@ -153,6 +147,7 @@ async fn main() -> std::io::Result<()> {
     let max = MaxPrice {};
     let min = MinPrice {};
     let price_diff = PriceDifference {};
+    let n_window_sma = WindowedSMA { window_size: 30 };
 
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
@@ -164,7 +159,7 @@ async fn main() -> std::io::Result<()> {
                 let period_min: f64 = min.calculate(&closes).await.unwrap();
                 let last_price = *closes.last().unwrap_or(&0.0);
                 let (_, pct_change) = price_diff.calculate(&closes).await.unwrap_or((0.0, 0.0));
-                let sma = n_window_sma(30, &closes).unwrap_or_default();
+                let sma = n_window_sma.calculate(&closes).await.unwrap_or_default();
 
             // a simple way to output CSV data
             println!(
@@ -235,20 +230,20 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_WindowedSMA_calculate() {
+    #[async_std::test]
+    async fn test_WindowedSMA_calculate() {
         let series = vec![2.0, 4.5, 5.3, 6.5, 4.7];
 
         let signal = WindowedSMA { window_size: 3 };
         assert_eq!(
-            signal.calculate(&series),
+            signal.calculate(&series).await,
             Some(vec![3.9333333333333336, 5.433333333333334, 5.5])
         );
 
         let signal = WindowedSMA { window_size: 5 };
-        assert_eq!(signal.calculate(&series), Some(vec![4.6]));
+        assert_eq!(signal.calculate(&series).await, Some(vec![4.6]));
 
         let signal = WindowedSMA { window_size: 10 };
-        assert_eq!(signal.calculate(&series), Some(vec![]));
+        assert_eq!(signal.calculate(&series).await, Some(vec![]));
     }
 }
