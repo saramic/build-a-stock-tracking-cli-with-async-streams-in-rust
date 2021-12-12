@@ -2,6 +2,7 @@ use chrono::prelude::*;
 use clap::Clap;
 use std::io::{Error, ErrorKind};
 use yahoo_finance_api as yahoo;
+use async_trait::async_trait;
 
 #[derive(Clap)]
 #[clap(
@@ -19,6 +20,7 @@ struct Opts {
 ///
 /// A trait to provide a common interface for all signal calculations.
 ///
+#[async_trait]
 trait AsyncStockSignal {
 
     ///
@@ -33,7 +35,7 @@ trait AsyncStockSignal {
     ///
     /// The signal (using the provided type) or `None` on error/invalid data.
     ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
 }
 
 trait StockSignal {
@@ -63,10 +65,15 @@ impl StockSignal for MinPrice {
 pub struct MaxPrice {
 }
 
-impl StockSignal for MaxPrice {
+#[async_trait]
+impl AsyncStockSignal for MaxPrice {
     type SignalType = f64;
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
-        max(series)
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        if series.is_empty() {
+            None
+        } else {
+            Some(series.iter().fold(f64::MIN, |acc, q| acc.max(*q)))
+        }
     }
 }
 
@@ -118,17 +125,6 @@ fn n_window_sma(n: usize, series: &[f64]) -> Option<Vec<f64>> {
 }
 
 ///
-/// Find the maximum in a series of f64
-///
-fn max(series: &[f64]) -> Option<f64> {
-    if series.is_empty() {
-        None
-    } else {
-        Some(series.iter().fold(f64::MIN, |acc, q| acc.max(*q)))
-    }
-}
-
-///
 /// Find the minimum in a series of f64
 ///
 fn min(series: &[f64]) -> Option<f64> {
@@ -170,13 +166,14 @@ async fn main() -> std::io::Result<()> {
     let from: DateTime<Utc> = opts.from.parse().expect("Couldn't parse 'from' date");
     let to = Utc::now();
 
+    let max = MaxPrice {};
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
     for symbol in opts.symbols.split(',') {
         let closes = fetch_closing_data(&symbol, &from, &to).await?;
         if !closes.is_empty() {
                 // min/max of the period. unwrap() because those are Option types
-                let period_max: f64 = max(&closes).unwrap();
+                let period_max: f64 = max.calculate(&closes).await.unwrap();
                 let period_min: f64 = min(&closes).unwrap();
                 let last_price = *closes.last().unwrap_or(&0.0);
                 let (_, pct_change) = price_diff(&closes).unwrap_or((0.0, 0.0));
@@ -235,18 +232,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_MaxPrice_calculate() {
+    #[async_std::test]
+    async fn test_MaxPrice_calculate() {
         let signal = MaxPrice {};
-        assert_eq!(signal.calculate(&[]), None);
-        assert_eq!(signal.calculate(&[1.0]), Some(1.0));
-        assert_eq!(signal.calculate(&[1.0, 0.0]), Some(1.0));
+        assert_eq!(signal.calculate(&[]).await, None);
+        assert_eq!(signal.calculate(&[1.0]).await, Some(1.0));
+        assert_eq!(signal.calculate(&[1.0, 0.0]).await, Some(1.0));
         assert_eq!(
-            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]),
+            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]).await,
             Some(10.0)
         );
         assert_eq!(
-            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]),
+            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]).await,
             Some(6.0)
         );
     }
