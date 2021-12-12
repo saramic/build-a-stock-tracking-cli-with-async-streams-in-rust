@@ -18,6 +18,13 @@ struct Question {
     tags: Option<Vec<String>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Answer {
+    id: String,
+    content: String,
+    question_id: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 struct QuestionId(String);
 
@@ -88,6 +95,24 @@ async fn delete_question(
     }
 }
 
+async fn add_answer(
+    store: Store,
+    params: HashMap<String, String>
+ ) -> Result<impl warp::Reply, warp::Rejection> {
+    let answer = Answer {
+        id: "CI001".to_string(),
+        content: params.get("content").unwrap().to_string(),
+        question_id: params.get("relationId").unwrap().to_string(),
+    };
+
+    store.answers.write().insert(answer.clone().id, answer);
+
+    Ok(warp::reply::with_status(
+        "Answer added",
+        StatusCode::OK,
+    ))
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
@@ -147,12 +172,14 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 #[derive(Debug, Clone)]
 struct Store {
     questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
+    answers: Arc<RwLock<HashMap<String, Answer>>>,
 }
 
 impl Store {
     fn new() -> Self {
         Store {
             questions: Arc::new(RwLock::new(Self::init())),
+            answers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
     fn init() -> HashMap<QuestionId, Question> {
@@ -200,10 +227,18 @@ async fn main() {
         .and(store_filter.clone())
         .and_then(delete_question);
 
+    let add_answer = warp::post()
+        .and(warp::path("answers"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::form())
+        .and_then(add_answer);
+
     let routes = get_questions
         .or(update_question)
         .or(delete_question)
         .or(add_question)
+        .or(add_answer)
         .with(cors)
         .recover(return_error);
 
