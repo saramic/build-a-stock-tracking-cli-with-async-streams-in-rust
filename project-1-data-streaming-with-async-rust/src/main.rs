@@ -55,10 +55,15 @@ impl StockSignal for PriceDifference {
 pub struct MinPrice {
 }
 
-impl StockSignal for MinPrice {
+#[async_trait]
+impl AsyncStockSignal for MinPrice {
     type SignalType = f64;
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
-        min(series)
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+        if series.is_empty() {
+            None
+        } else {
+            Some(series.iter().fold(f64::MAX, |acc, q| acc.min(*q)))
+        }
     }
 }
 
@@ -125,17 +130,6 @@ fn n_window_sma(n: usize, series: &[f64]) -> Option<Vec<f64>> {
 }
 
 ///
-/// Find the minimum in a series of f64
-///
-fn min(series: &[f64]) -> Option<f64> {
-    if series.is_empty() {
-        None
-    } else {
-        Some(series.iter().fold(f64::MAX, |acc, q| acc.min(*q)))
-    }
-}
-
-///
 /// Retrieve data from a data source and extract the closing prices. Errors during download are mapped onto io::Errors as InvalidData.
 ///
 async fn fetch_closing_data(
@@ -167,6 +161,8 @@ async fn main() -> std::io::Result<()> {
     let to = Utc::now();
 
     let max = MaxPrice {};
+    let min = MinPrice {};
+
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
     for symbol in opts.symbols.split(',') {
@@ -174,7 +170,7 @@ async fn main() -> std::io::Result<()> {
         if !closes.is_empty() {
                 // min/max of the period. unwrap() because those are Option types
                 let period_max: f64 = max.calculate(&closes).await.unwrap();
-                let period_min: f64 = min(&closes).unwrap();
+                let period_min: f64 = min.calculate(&closes).await.unwrap();
                 let last_price = *closes.last().unwrap_or(&0.0);
                 let (_, pct_change) = price_diff(&closes).unwrap_or((0.0, 0.0));
                 let sma = n_window_sma(30, &closes).unwrap_or_default();
@@ -216,18 +212,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_MinPrice_calculate() {
+    #[async_std::test]
+    async fn test_MinPrice_calculate() {
         let signal = MinPrice {};
-        assert_eq!(signal.calculate(&[]), None);
-        assert_eq!(signal.calculate(&[1.0]), Some(1.0));
-        assert_eq!(signal.calculate(&[1.0, 0.0]), Some(0.0));
+        assert_eq!(signal.calculate(&[]).await, None);
+        assert_eq!(signal.calculate(&[1.0]).await, Some(1.0));
+        assert_eq!(signal.calculate(&[1.0, 0.0]).await, Some(0.0));
         assert_eq!(
-            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]),
+            signal.calculate(&[2.0, 3.0, 5.0, 6.0, 1.0, 2.0, 10.0]).await,
             Some(1.0)
         );
         assert_eq!(
-            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]),
+            signal.calculate(&[0.0, 3.0, 5.0, 6.0, 1.0, 2.0, 1.0]).await,
             Some(0.0)
         );
     }
