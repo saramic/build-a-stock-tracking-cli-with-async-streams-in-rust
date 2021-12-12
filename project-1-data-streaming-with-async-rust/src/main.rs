@@ -38,10 +38,6 @@ trait AsyncStockSignal {
     async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
 }
 
-trait StockSignal {
-    type SignalType;
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
-}
 pub struct PriceDifference {
 }
 
